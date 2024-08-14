@@ -45,6 +45,10 @@ def create_vm_instance(compute, project, zone, instance_name, machine_type, imag
     print(f"Waiting for operation {operation.name} to finish...")
     wait_for_operation(compute, project, zone, operation.name)
 
+    # Get the instance details after creation
+    instance_details = compute.get(project=project, zone=zone, instance=instance_name)
+    return instance_details
+
 def wait_for_operation(compute, project, zone, operation):
     while True:
         result = compute.zone_operations().get(
@@ -61,10 +65,30 @@ def wait_for_operation(compute, project, zone, operation):
 def create_multiple_vms(project, zone, instance_base_name, num_instances, machine_type, image_family, image_project, startup_script):
     credentials, project_id = google.auth.default()
     compute = compute_v1.InstancesClient(credentials=credentials)
+    
+    proxy_list = []  # List to store proxy details
 
     for i in range(1, num_instances + 1):
         instance_name = f"{instance_base_name}-{i}"
-        create_vm_instance(compute, project, zone, instance_name, machine_type, image_family, image_project, startup_script)
+        instance_details = create_vm_instance(compute, project, zone, instance_name, machine_type, image_family, image_project, startup_script)
+        
+        # Extract the external IP address and other relevant details
+        external_ip = None
+        for iface in instance_details.network_interfaces:
+            for config in iface.access_configs:
+                if config.name == "External NAT":
+                    external_ip = config.nat_ip
+        
+        proxy_info = {
+            "instance_name": instance_name,
+            "external_ip": external_ip,
+            "zone": zone,
+            "machine_type": machine_type
+        }
+        
+        proxy_list.append(proxy_info)
+
+    return proxy_list
 
 if __name__ == "__main__":
     # User input for configuration settings
@@ -84,4 +108,10 @@ if __name__ == "__main__":
     sudo systemctl restart squid
     """
 
-    create_multiple_vms(PROJECT, ZONE, INSTANCE_BASE_NAME, NUM_INSTANCES, MACHINE_TYPE, IMAGE_FAMILY, IMAGE_PROJECT, STARTUP_SCRIPT)
+    # Create multiple VMs and get the list of proxies
+    proxy_list = create_multiple_vms(PROJECT, ZONE, INSTANCE_BASE_NAME, NUM_INSTANCES, MACHINE_TYPE, IMAGE_FAMILY, IMAGE_PROJECT, STARTUP_SCRIPT)
+
+    # Print the list of proxies with details
+    print("Proxy Instances and Details:")
+    for proxy in proxy_list:
+        print(f"Instance Name: {proxy['instance_name']}, External IP: {proxy['external_ip']}, Zone: {proxy['zone']}, Machine Type: {proxy['machine_type']}")
