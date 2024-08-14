@@ -8,6 +8,11 @@ def create_vm_instance(compute, project, zone, instance_name, machine_type, imag
     instance.zone = zone
     instance.machine_type = f"zones/{zone}/machineTypes/{machine_type}"
 
+    # Set the instance to be preemptible
+    scheduling = compute_v1.Scheduling()
+    scheduling.preemptible = True
+    instance.scheduling = scheduling
+
     disk = compute_v1.AttachedDisk()
     initialize_params = compute_v1.AttachedDiskInitializeParams()
     initialize_params.source_image = f"projects/{image_project}/global/images/family/{image_family}"
@@ -18,6 +23,13 @@ def create_vm_instance(compute, project, zone, instance_name, machine_type, imag
     instance.disks = [disk]
 
     network_interface = compute_v1.NetworkInterface()
+    access_config = compute_v1.AccessConfig()
+    access_config.name = "External NAT"
+    access_config.type_ = compute_v1.AccessConfig.Type.ONE_TO_ONE_NAT
+    access_config.network_tier = "PREMIUM"
+    
+    # Request an ephemeral external IP address
+    network_interface.access_configs = [access_config]
     network_interface.name = "global/networks/default"
     instance.network_interfaces = [network_interface]
 
@@ -55,16 +67,16 @@ def create_multiple_vms(project, zone, instance_base_name, num_instances, machin
         create_vm_instance(compute, project, zone, instance_name, machine_type, image_family, image_project, startup_script)
 
 if __name__ == "__main__":
-    # User input voor configuratie-instellingen
-    PROJECT = input("Voer je Google Cloud Project ID in: ")
-    ZONE = input("Voer de zone in (bijv. us-central1-a): ")
-    INSTANCE_BASE_NAME = input("Voer de basisnaam voor de instances in (bijv. proxy): ")
-    NUM_INSTANCES = int(input("Voer het aantal instances in dat je wilt aanmaken: "))
-    MACHINE_TYPE = input("Voer het machine type in (bijv. f1-micro): ")
-    IMAGE_FAMILY = input("Voer de image family in (bijv. debian-10): ")
-    IMAGE_PROJECT = input("Voer het image project in (bijv. debian-cloud): ")
+    # User input for configuration settings
+    PROJECT = input("Enter your Google Cloud Project ID: ")
+    ZONE = input("Enter the zone (e.g., us-central1-a): ")
+    INSTANCE_BASE_NAME = input("Enter the base name for the instances (e.g., proxy): ")
+    NUM_INSTANCES = 100  # Set to 100 instances
+    MACHINE_TYPE = input("Enter the machine type (e.g., f1-micro): ")
+    IMAGE_FAMILY = input("Enter the image family (e.g., debian-10): ")
+    IMAGE_PROJECT = input("Enter the image project (e.g., debian-cloud): ")
     
-    # Optioneel: pas dit opstartscript aan of vraag om user input als je dit wilt aanpassen
+    # Optional: Customize this startup script or ask for user input if you want to adjust it
     STARTUP_SCRIPT = """#!/bin/bash
     sudo apt-get update
     sudo apt-get install -y squid
